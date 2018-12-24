@@ -2,88 +2,97 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL2_gfxPrimitives.h>
+#include <SDL.h>
+#include <SDL2_gfxPrimitives.h>
 
-const int step = 5;
-void moveCircle(SDL_Keycode key, double* snake_x, double* snake_y) {
-	switch (key) {
-		case SDLK_UP:
-			*snake_y -= step;
-			break;
-		case SDLK_DOWN:
-			*snake_y += step;
-			break;
-		case SDLK_RIGHT:
-			*snake_x += step;
-			break;
-		case SDLK_LEFT:
-			*snake_x -= step;
-			break;
-	}
+
+struct Bullet{
+    double x,y,move_x,move_y;
+    int time;
+
+}bullet[10000];
+
+
+double tank_x=100;
+double tank_y=100;
+double tank_radius=30;
+double tank_move_x=1;
+double tank_move_y=0;
+double tank_move_degree=0;
+int number_of_bullets=0;
+const int step = 20;
+const int bullet_speed=20;
+const int bullet_max_time=20;
+const double PI=3.14159265359;
+
+void turn_degree(double degree)
+{
+    tank_move_degree+=degree;
+    tank_move_x=cos(tank_move_degree*PI/180);
+    tank_move_y=sin(tank_move_degree*PI/180);
 }
 
-bool hasEatenFood(double snake_x, double snake_y, double food_x, double food_y, double radius, double rx, double ry) {
-	double distance = sqrt(pow(snake_x - food_x, 2) + pow(snake_y - food_y, 2));
-	return distance < radius + (rx + ry) / 2;
-}
-
-void changeFoodLocation(double * food_x, double * food_y) {
-	*food_x = rand() % 600 + 100;
-	*food_y = rand() % 400 + 100;
-}
-
-const int EXIT = 12345;
-int handleEvents(double* snake_x, double* snake_y) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-    	if (event.type == SDL_QUIT)
-    	    return EXIT;
-    	if (event.type == SDL_KEYDOWN)
-    		moveCircle(event.key.keysym.sym , snake_x, snake_y);
+void moveTank(SDL_Keycode key) {
+    switch (key) {
+        case SDLK_UP:
+            tank_x += tank_move_x*step;
+            tank_y += tank_move_y*step;
+            break;
+        case SDLK_DOWN:
+            tank_x -= tank_move_x*step;
+            tank_y -= tank_move_y*step;
+            break;
+        case SDLK_RIGHT:
+            turn_degree(15);
+            break;
+        case SDLK_LEFT:
+            turn_degree(-15);
+            break;
+        case SDLK_SPACE:
+            bullet[number_of_bullets].x=tank_x+1.5*tank_radius*tank_move_x;
+            bullet[number_of_bullets].y=tank_y+1.5*tank_radius*tank_move_y;
+            bullet[number_of_bullets].move_x=tank_move_x*bullet_speed;
+            bullet[number_of_bullets].move_y=tank_move_y*bullet_speed;
+            bullet[number_of_bullets].time=0;
+            number_of_bullets++;
+            break;
     }
 }
 
-int main() {
-	double snake_x = 100;
-	double snake_y = 100;
-	double snake_radius = 20;
-    int snake_score = 0;
 
-	double food_x = 300;
-	double food_y = 300;
-	double food_rx = 15;
-	double food_ry = 10;
 
-	SDL_Init(SDL_INIT_VIDEO);
-	SDL_Window* window = SDL_CreateWindow("workshop", 20, 20, 800, 600, SDL_WINDOW_OPENGL);
+#ifdef main
+#undef main
+#endif /* main */
+
+
+int main(int argc , char* argv[]) {
+
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("workshop", 20, 20, 800, 600, SDL_WINDOW_OPENGL);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-
-    int begining_of_time = SDL_GetTicks();
-    const double FPS = 30;
     while (1) {
-        int start_ticks = SDL_GetTicks();
+        SDL_Event event;
+        if(SDL_PollEvent(&event))
+        {
+            if(event.type==SDL_QUIT) {break;}
+            if(event.type==SDL_KEYDOWN)
+                moveTank(event.key.keysym.sym);
+            SDL_SetRenderDrawColor(renderer,200,200,200,50);
+            SDL_RenderClear(renderer);
+            for(int i=0;i<number_of_bullets;i++)
+                if(bullet[i].time<bullet_max_time)
+                {
+                    bullet[i].time++;
+                    filledCircleRGBA(renderer,bullet[i].x,bullet[i].y,4,128,0,255,100);
+                    bullet[i].x+=bullet[i].move_x;
+                    bullet[i].y+=bullet[i].move_y;
+                }
+            filledCircleRGBA(renderer,tank_x,tank_y,tank_radius,0,150,255,100);
+            thickLineRGBA(renderer,tank_x,tank_y,tank_x+1.5*tank_radius*tank_move_x,tank_y+1.5*tank_radius*tank_move_y,10,0,150,255,100);
 
-        if (handleEvents(&snake_x, &snake_y) == EXIT) break;
-
-    	SDL_SetRenderDrawColor(renderer, 120, 60, 80, 255);
-    	SDL_RenderClear(renderer);
-
-    	if (hasEatenFood(snake_x, snake_y, food_x, food_y, snake_radius, food_rx, food_ry)) {
-    	   	snake_radius *= 1.2;
-            snake_score++;
-    	   	changeFoodLocation(&food_x, &food_y);
-    	}
-
-    	filledCircleRGBA(renderer, snake_x, snake_y, snake_radius, 0, 100, 100, 255);
-    	filledEllipseRGBA(renderer, food_x, food_y, food_rx, food_ry, rand() % 255, rand() % 255, rand() % 255, 255);
-        char* buffer = malloc(sizeof(char) * 50);
-        sprintf(buffer, "score: %d   elapsed time: %dms", snake_score, start_ticks - begining_of_time);
-        printf("%s", buffer);
-        stringRGBA(renderer, 5, 5, buffer, 0, 0, 0, 255);
-    	SDL_RenderPresent(renderer);
-
-        while (SDL_GetTicks() - start_ticks < 1000 / FPS);
+            SDL_RenderPresent(renderer);
+        }
     }
 
     SDL_DestroyRenderer(renderer);
